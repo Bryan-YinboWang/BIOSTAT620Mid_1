@@ -1,0 +1,69 @@
+---
+title: "Midterm 1"
+author: "Yinbo Wang"
+date: "2023-04-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# Install necessary libraries if not installed
+packages <- c("randomForest","naniar")
+
+# Check if the packages are installed and install them if they are not
+for (package in packages) {
+  if (!require(package, character.only = TRUE)) {
+    install.packages(package)
+    library(package, character.only = TRUE)
+  }
+}
+
+# Load the data
+train_data <- read.table("training_data.txt", header = FALSE)
+test_data <- read.table("test_data.txt", header = FALSE)
+any(is.na(train_data))
+
+```
+```{r}
+# Preprocess the data
+train_data$V2 <- ifelse(train_data$V2 %in% c(1,2,3), 1, 0) # Convert to binary (static or dynamic)
+train_labels <- train_data$V2
+train_data <- train_data[, -c(1, 2)] # Remove subject ID and activity code columns
+test_data <- test_data[, -1] # Remove subject ID column
+
+# Calculate proportion of NA
+total_na <- sum(is.na(train_data))
+total_elements <- length(train_data)
+proportion_na <- total_na / total_elements
+proportion_na
+```
+```{r}
+# Load required packages
+library(randomForest)
+train_labels <- as.factor(train_labels)
+
+# Build binary classifier using random forest
+binary_classifier <- randomForest(x = train_data, y = train_labels, ntree = 500, importance = TRUE)
+
+# Predict using the binary classifier
+binary_predictions <- predict(binary_classifier, test_data)
+
+# Further classify activities using a refined multi-class classifier
+train_data <- read.table("training_data.txt", header = FALSE, sep = "\t")
+train_labels <- ifelse(train_data$V2 %in% c(4, 5, 6, 7, 8, 9, 10, 11, 12), train_data$V2 - 3, train_data$V2)
+train_data <- train_data[, -c(1, 2)] # Remove subject ID and activity code columns
+
+# Build multi-class classifier using random forest
+multiclass_classifier <- randomForest(x = train_data, y = train_labels, ntree = 500, importance = TRUE)
+
+# Predict using the multi-class classifier
+multiclass_predictions <- predict(multiclass_classifier, test_data)
+
+# Combine binary and multiclass predictions
+final_predictions <- ifelse(binary_predictions == 0, multiclass_predictions, binary_predictions)
+
+# Output final predictions
+write.table(final_predictions, "predictions.txt", row.names = FALSE, col.names = FALSE, quote = FALSE)
+
+```
+
