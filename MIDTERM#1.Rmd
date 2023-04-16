@@ -1,0 +1,162 @@
+---
+title: "626 Midterm_1"
+author: "Yinbo Wang"
+date: "2023-04-05"
+output: html_document
+---
+```{r}
+# Install necessary libraries if not installed
+packages <- c("randomForest","naniar")
+
+# Check if the packages are installed and install them if they are not
+for (package in packages) {
+  if (!require(package, character.only = TRUE)) {
+    install.packages(package)
+    library(package, character.only = TRUE)
+  }
+}
+
+library(doParallel)
+
+# Register parallel processing with all available cores - 1
+registerDoParallel(cores = detectCores() - 1)
+
+
+
+# Load the data
+library(caret)
+library(randomForest)
+train_data <- read.delim("training_data.txt", header = F, stringsAsFactors = FALSE)
+test_data <- read.delim("test_data.txt", header = F, stringsAsFactors = FALSE)
+
+# Remove the first row (header) from both train_data and test_data
+train_data <- train_data[-1, ]
+test_data <- test_data[-1, ]
+
+# Convert the V2 column to numeric
+train_data$V2 <- as.numeric(as.character(train_data$V2))
+test_data$V2 <- as.numeric(as.character(test_data$V2))
+
+# Preprocess the data
+train_data$V2 <- ifelse(train_data$V2 %in% c(1,2,3), 1, 0) # Convert to binary (static or dynamic)
+train_labels <- train_data$V2
+train_data <- train_data[, -c(1, 2)] # Remove subject ID and activity code columns
+
+# Ensure both datasets have the same structure
+train_data <- train_data[, colnames(train_data) %in% colnames(test_data)]
+test_data <- test_data[, -1] # Remove subject ID column
+
+# Random search grid
+tune_grid <- expand.grid(
+  mtry = seq(floor(sqrt(ncol(train_data))), ncol(train_data), length.out = 5),
+  splitrule = "gini",
+  min.node.size = c(1, 3, 5, 7, 9)
+)
+
+# Train control for random search with 5-fold cross-validation
+train_control <- trainControl(
+  method = "cv",
+  number = 3,
+  search = "random",
+  verboseIter = TRUE
+)
+
+# Load required packages
+library(randomForest)
+train_labels <- as.factor(train_labels)
+
+# Build binary classifier using random forest
+#binary_classifier <- randomForest(x = train_data, y = train_labels, ntree = 500, importance = TRUE)
+
+# Build binary classifier using random forest with hyperparameter tuning
+binary_classifier <- train(
+  x = train_data,
+  y = train_labels,
+  method = "ranger",
+  trControl = train_control,
+  tuneGrid = tune_grid,
+  num.trees = 500,
+  importance = "impurity"
+)
+
+
+# Predict using the binary classifier
+binary_predictions <- predict(binary_classifier, test_data)
+
+# Save the binary predictions to a file
+write.table(binary_predictions, file = "binary_yinbow.txt", col.names = FALSE, row.names = FALSE,quote = FALSE)
+
+# Stop parallel processing
+stopImplicitCluster()
+```
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# Install necessary libraries if not installed
+packages <- c("randomForest","naniar")
+
+# Check if the packages are installed and install them if they are not
+for (package in packages) {
+  if (!require(package, character.only = TRUE)) {
+    install.packages(package)
+    library(package, character.only = TRUE)
+  }
+}
+
+library(doParallel)
+
+# Register parallel processing with all available cores - 1
+registerDoParallel(cores = detectCores() - 1)
+
+#load the data
+# Load the data
+library(caret)
+library(randomForest)
+train_data <- read.delim("training_data.txt", header = F, stringsAsFactors = FALSE)
+test_data <- read.delim("test_data.txt", header = F, stringsAsFactors = FALSE)
+
+# Remove the first row (header) from both train_data and test_data
+train_data <- train_data[-1, ]
+test_data <- test_data[-1, ]
+
+# Convert the V2 column to numeric
+train_data$V2 <- as.numeric(as.character(train_data$V2))
+test_data$V2 <- as.numeric(as.character(test_data$V2))
+
+# Adjust labels to match the 7 activity classes
+train_data$V2[train_data$V2 > 7] <- train_data$V2[train_data$V2 > 7] - 5
+
+# Create multi-class labels for the training data
+train_labels_multiclass <- as.factor(train_data$V2)
+
+# Remove subject ID and activity code columns
+train_data <- train_data[, -c(1, 2)]
+test_data <- test_data[, -1]
+
+# Ensure both datasets have the same structure
+train_data <- train_data[, colnames(train_data) %in% colnames(test_data)]
+
+# Build multi-class classifier using random forest
+#multiclass_classifier <- randomForest(x = train_data, y = train_labels_multiclass, ntree = 500, importance = TRUE)
+
+# Build multi-class classifier using random forest with hyperparameter tuning
+multiclass_classifier <- train(
+  x = train_data,
+  y = train_labels_multiclass,
+  method = "ranger",
+  trControl = train_control,
+  tuneGrid = tune_grid,
+  num.trees = 500,
+  importance = "impurity"
+)
+
+
+# Predict using the multi-class classifier
+multiclass_predictions <- predict(multiclass_classifier, test_data)
+
+# Save the multiclass predictions to a file
+write.table(multiclass_predictions, "multiclass_yinbow.txt", row.names = FALSE, col.names = FALSE, quote = FALSE)
+
+stopImplicitCluster()
+```
+
+
